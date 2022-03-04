@@ -1,0 +1,6 @@
+# LSP
+.cache
+compile_commands.json
+
+# Data
+data
