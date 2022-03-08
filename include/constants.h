@@ -11,6 +11,7 @@
 #include <nav_msgs/Odometry.h>
 
 #include <opencv2/opencv.hpp>
+#include <opencv2/highgui.hpp>
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -35,6 +36,14 @@ const int VERTICAL_CHANNEL_RESOLUTION = 64;
 const int HORIZONTAL_CHANNEL_RESOLUTION = 1024;
 const float VERTICAL_ANGULAR_RESOLUTION = 33.2 / float(VERTICAL_CHANNEL_RESOLUTION);
 const float HORIZONTAL_ANGULAR_RESOLUTION = 360.0 / float(HORIZONTAL_CHANNEL_RESOLUTION);
+const float VERTICAL_ALPHA = VERTICAL_ANGULAR_RESOLUTION / 180 * M_PI;
+const float HORIZONTAL_ALPHA = HORIZONTAL_ANGULAR_RESOLUTION / 180 * M_PI;
+
+// segmentation threshold
+const float SEG_THRESH = 10.0 / 180 * M_PI; // 10 degrees according to paper
+
+// sensor distance threshold
+const float SENSOR_DIST_THRESH = 1.0;
 
 
 // OUSTER point type
