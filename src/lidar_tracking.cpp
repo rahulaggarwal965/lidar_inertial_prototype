@@ -16,7 +16,7 @@ class LidarTracking {
     cv::Mat label_image;
     // @PERFORMANCE(rahul): not sure how efficient usuing queue<pair> or vector<pair> is
     std::queue<std::pair<int, int>> segmentation_queue;
-    std::vector<std::pair<int, int>> neighbors = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
+    std::vector<std::pair<int, int>> neighbors = {{-1, 0}, {0, 1}, {1, 0}, {-0, -1}}; // row, col
 
 public:
     LidarTracking()
@@ -35,6 +35,7 @@ public:
 
     void convert_point_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_msg);
     void project_point_cloud();
+    void preprocess_point_cloud_segmentation();
     void segment_point_cloud();
 
 };
@@ -42,7 +43,8 @@ public:
 void LidarTracking::cloud_callback(const sensor_msgs::PointCloud2ConstPtr &cloud_msg) {
     convert_point_cloud(cloud_msg);
     project_point_cloud();
-    /* segment_point_cloud(); */
+    preprocess_point_cloud_segmentation();
+    segment_point_cloud();
 }
 
 void LidarTracking::convert_point_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_msg) {
@@ -76,7 +78,6 @@ void LidarTracking::project_point_cloud() {
             max_dist = dist;
         }
 
-
     }
 
     // @DEBUG
@@ -85,11 +86,24 @@ void LidarTracking::project_point_cloud() {
     if (cv::waitKey(32) == 113) return;
 }
 
-void LidarTracking::segment_point_cloud() {
-    int label = 0;
+void LidarTracking::preprocess_point_cloud_segmentation() {
+
     this->label_image.setTo(cv::Scalar::all(0));
+
     for (int r = 0; r < VERTICAL_CHANNEL_RESOLUTION; r++) {
         for (int c = 0; c < HORIZONTAL_CHANNEL_RESOLUTION; c++) {
+            if (range_image.at<float>(r, c) == FLT_MAX) {
+                label_image.at<float>(r, c) = -1;
+            }
+        }
+    }
+}
+
+void LidarTracking::segment_point_cloud() {
+    int label = 0;
+    for (int r = 0; r < VERTICAL_CHANNEL_RESOLUTION; r++) {
+        for (int c = 0; c < HORIZONTAL_CHANNEL_RESOLUTION; c++) {
+            printf("r: %d, c: %d\n", r, c);
             if (this->label_image.at<int>(r, c) != 0) continue;
             this->label_image.at<int>(r, c) = label;
             segmentation_queue.emplace(r, c);
@@ -113,7 +127,7 @@ void LidarTracking::segment_point_cloud() {
                     float d1 = fmax(range_image.at<float>(r1, c1), range_image.at<float>(r2, c2));
                     float d2 = fmin(range_image.at<float>(r1, c1), range_image.at<float>(r2, c2));
 
-                    float alpha = (neighbor_offset.first == 0) ? VERTICAL_ALPHA : HORIZONTAL_ALPHA;
+                    float alpha = (neighbor_offset.first == 0) ? HORIZONTAL_ALPHA : VERTICAL_ALPHA;
 
                     if (atan2(d2 * sin(alpha), d1 - d2 * cos(alpha)) > SEG_THRESH) {
                         this->label_image.at<int>(r2, c2) = label;
@@ -125,6 +139,9 @@ void LidarTracking::segment_point_cloud() {
             label++;
         }
     }
+
+    cv::imshow("Segmented Image", this->label_image);
+    if (cv::waitKey(32) == 113) return;
 
 }
 
