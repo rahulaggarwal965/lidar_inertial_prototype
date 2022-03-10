@@ -18,6 +18,11 @@ class LidarTracking {
     std::queue<std::pair<int, int>> segmentation_queue;
     std::vector<std::pair<int, int>> neighbors = {{-1, 0}, {0, 1}, {1, 0}, {-0, -1}}; // row, col
 
+    // @DEBUG
+    std::vector<std::tuple<uchar, uchar, uchar>> lab_distributed_points;
+    int max_labels = -1;
+    void gen_lab_points(int num_labels);
+
 public:
     LidarTracking()
     : current_point_cloud(new pcl::PointCloud<OusterPointXYZIRT>()),
@@ -100,16 +105,15 @@ void LidarTracking::preprocess_point_cloud_segmentation() {
 }
 
 void LidarTracking::segment_point_cloud() {
-    int label = 0;
+    int label = 1;
     for (int r = 0; r < VERTICAL_CHANNEL_RESOLUTION; r++) {
         for (int c = 0; c < HORIZONTAL_CHANNEL_RESOLUTION; c++) {
-            printf("r: %d, c: %d\n", r, c);
             if (this->label_image.at<int>(r, c) != 0) continue;
-            this->label_image.at<int>(r, c) = label;
             segmentation_queue.emplace(r, c);
             while (!this->segmentation_queue.empty()) {
                 const auto &index = segmentation_queue.front();
                 const int r1 = index.first; const int c1 = index.second;
+                this->label_image.at<int>(r1, c1) = label;
 
                 for (const auto &neighbor_offset : neighbors) {
                     int r2 = r1 + neighbor_offset.first;
@@ -140,8 +144,48 @@ void LidarTracking::segment_point_cloud() {
         }
     }
 
-    cv::imshow("Segmented Image", this->label_image);
+    // @DEBUG
+    if (label > max_labels) {
+        max_labels = label;
+        gen_lab_points(label); 
+    }
+
+    cv::Mat segmented_image(VERTICAL_CHANNEL_RESOLUTION, HORIZONTAL_CHANNEL_RESOLUTION, CV_8UC3);
+
+    for (int r = 0; r < VERTICAL_CHANNEL_RESOLUTION; r++) {
+        for (int c = 0; c < HORIZONTAL_CHANNEL_RESOLUTION; c++) {
+            int label = label_image.at<int>(r, c);
+
+            if (label < 0) {
+                segmented_image.at<cv::Vec3b>(r, c) = {255, 255, 255};
+            } else {
+                const auto &col = lab_distributed_points[label];
+                // @Performance
+                segmented_image.at<cv::Vec3b>(r, c) = {std::get<0>(col), std::get<1>(col), std::get<2>(col)};
+            }
+        }
+    }
+    cv::Mat seg_show_image{};
+    cv::cvtColor(segmented_image, seg_show_image, cv::COLOR_Lab2BGR);
+    cv::imshow("Segmented Image", seg_show_image);
     if (cv::waitKey(32) == 113) return;
+
+}
+
+// @Refactor
+void LidarTracking::gen_lab_points(int num_labels) {
+    this->lab_distributed_points.clear();
+    int c = ceil(pow(num_labels, 1.0/3.0));
+    int offset = 255 / c; // floor implicit
+
+    for (int i = 0; i < c; i++) {
+        for (int j = 0; j < c; j++) {
+            for (int k = 0; k < c; k++) {
+                this->lab_distributed_points.emplace_back(i * offset , j * offset, k * offset);
+            }
+        }
+    }
+
 
 }
 
