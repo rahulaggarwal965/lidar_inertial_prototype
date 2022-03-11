@@ -1,5 +1,6 @@
 #include "constants.h"
 #include "visualization.h"
+#include "kernels.h"
 
 class LidarTracking {
 
@@ -19,8 +20,8 @@ class LidarTracking {
     cv::Mat ground_image;
     cv::Mat label_image;
 
-    // @PERFORMANCE(rahul): not sure how efficient usuing queue<pair> or vector<pair> is
-    std::queue<std::pair<int, int>> segmentation_queue;
+    // @Performance(rahul): not sure how efficient usuing queue<pair> or vector<pair> is
+    std::deque<std::pair<int, int>> segmentation_queue;
     std::vector<std::pair<int, int>> neighbors = {{-1, 0}, {0, 1}, {1, 0}, {-0, -1}}; // row, col
 
 public:
@@ -148,65 +149,91 @@ cv::Mat smooth_range_image(const cv::Mat &range_image, int step, float depth_thr
 
 void LidarTracking::remove_ground() {
 
+    cv::Mat inclination_angles = cv::Mat::zeros(VERTICAL_CHANNEL_RESOLUTION, HORIZONTAL_CHANNEL_RESOLUTION, CV_32F);
+
+    for (int c = 0; c < HORIZONTAL_CHANNEL_RESOLUTION; c++) {
+        for (int r = 0; r < VERTICAL_CHANNEL_RESOLUTION - 1; r++) {
+
+            if (range_image.at<float>(r, c) < EPSILON || range_image.at<float>(r + 1, c) < EPSILON) {
+                continue;
+            }
+
+            const auto index1 = r * HORIZONTAL_CHANNEL_RESOLUTION + c;
+            const auto index2 = index1 + HORIZONTAL_CHANNEL_RESOLUTION;
+
+            const float dx = indexed_point_cloud->points[index2].x - indexed_point_cloud->points[index1].x;
+            const float dy = indexed_point_cloud->points[index2].y - indexed_point_cloud->points[index1].y;
+            const float dz = indexed_point_cloud->points[index2].z - indexed_point_cloud->points[index1].z;
+
+            inclination_angles.at<float>(r, c) = atan2(abs(dz), sqrt(dx * dx + dy * dy));
+        }
+    }
+
+    // @ArbitraryParameter
+    // @Performance - The paper recommends using this kernel to smooth out angles, 
+    // but I don't know if it is actually valuable
+    cv::Mat smoothing_kernel = savitsky_golay_kernel(5);
+    cv::Mat smoothed_inclination_angles;
+    cv::filter2D(inclination_angles, smoothed_inclination_angles, -1, smoothing_kernel);
+
+    // Ground BFS @Refactor very similar to segmentation code
+    segmentation_queue.clear();
+
+    for (int c = 0; c < HORIZONTAL_CHANNEL_RESOLUTION; c++) {
+
+        int r = VERTICAL_CHANNEL_RESOLUTION - 1;
+        while (r > 0 && range_image.at<float>(r, c) < EPSILON) {
+          --r;
+        }
+        if (ground_image.at<int8_t>(r, c) != 0) continue;
+
+        segmentation_queue.emplace_back(r, c);
+
+        while (!segmentation_queue.empty()) {
+            const auto &index = segmentation_queue.front();
+            segmentation_queue.pop_front();
+            const int r1 = index.first; const int c1 = index.second;
+
+            if (ground_image.at<int8_t>(r1, c1) != 0) continue;
+
+            if (range_image.at<float>(r1, c1) < EPSILON) {
+                ground_image.at<int8_t>(r1, c1) = -1;
+                continue;
+            }
+
+            ground_image.at<int8_t>(r1, c1) = 1;
+
+            for (const auto &neighbor_offset : neighbors) {
+                int r2 = r1 + neighbor_offset.first;
+                int c2 = c1 + neighbor_offset.second;
+
+                if (r2 < 0 || r2 >= VERTICAL_CHANNEL_RESOLUTION) continue; // vfov is not 360 degress
+                if (c2 < 0) {
+                    c2 = HORIZONTAL_CHANNEL_RESOLUTION - 1;
+                } else if (c2 >= HORIZONTAL_CHANNEL_RESOLUTION) {
+                    c2 = 0;
+                }
+
+                if (ground_image.at<int8_t>(r2, c2) != 0) continue;
+
+                const float a1 = smoothed_inclination_angles.at<float>(r1, c1);
+                const float a2 = smoothed_inclination_angles.at<float>(r2, c2);
+
+                if (abs(a1 - a2) < GROUND_ANGLE_THRESH) {
+                    segmentation_queue.emplace_back(r2, c2);
+                }
+            }
+        }
+    }
 
 
-/*     cv::Mat smoothed_range_image = smooth_range_image(this->range_image, 5, 1.0f); */
-/*  */
-/*     float max_dist = -FLT_MAX; */
-/*     // @DEBUG */
-/*     for (int r = 0; r < VERTICAL_CHANNEL_RESOLUTION; r++) { */
-/*         for (int c = 0; c < HORIZONTAL_CHANNEL_RESOLUTION; c++) { */
-/*             const float range = smoothed_range_image.at<float>(r, c); */
-/*             if (range != FLT_MAX && range > max_dist) { */
-/*                 max_dist = range; */
-/*             } */
-/*         } */
-/*     } */
-
-/*     cv::Mat diff = smoothed_range_image - range_image; */
-/*     printf("norm: %f\n", cv::norm(diff)); */
-/*  */
-/*     cv::imshow("Smoothed Depth Image", smoothed_range_image / max_dist); */
-/*     if (cv::waitKey(32) == 113) return; */
-/*     for (int c = 0; c < HORIZONTAL_CHANNEL_RESOLUTION; c++) { */
-/*         // do lidar rings go from top to bottom? */
-/*         for (int r = VERTICAL_CHANNEL_RESOLUTION - 1; r >= VERTICAL_CHANNEL_RESOLUTION - 1 - POSSIBLE_GROUND_INDICES; r--) { */
-/*  */
-/*             if (range_image.at<float>(r - 1, c) == FLT_MAX || range_image.at<float>(r, c) == FLT_MAX) { */
-/*                 ground_image.at<int8_t>(r, c) = -1; */
-/*             } */
-/*  */
-/*             const auto index1 = r * HORIZONTAL_CHANNEL_RESOLUTION + c; */
-/*             const auto index2 = index1 - HORIZONTAL_CHANNEL_RESOLUTION; */
-/*  */
-/*             const float dx = indexed_point_cloud->points[index2].x - indexed_point_cloud->points[index1].x; */
-/*             const float dy = indexed_point_cloud->points[index2].y - indexed_point_cloud->points[index1].y; */
-/*             const float dz = indexed_point_cloud->points[index2].z - indexed_point_cloud->points[index1].z; */
-/*  */
-/*             const float angle = atan2(dz, sqrt(dx * dx + dy * dy)) * 180 / M_PI; */
-/*  */
-/*             // @ArbitraryParameter got from LeGO LOAM */
-/*             if (angle < 10) { */
-/*                 ground_image.at<int8_t>(r, c) = 1;  */
-/*                 ground_image.at<int8_t>(r - 1, c) = 1;  */
-/*             } */
-/*  */
-/*         } */
-    /* } */
-
-    // @DEBUG
-/*     cv::Mat ground_viz(VERTICAL_CHANNEL_RESOLUTION, HORIZONTAL_CHANNEL_RESOLUTION, CV_8UC1, cv::Scalar(255)); */
-/*     for (int r = 0; r < VERTICAL_CHANNEL_RESOLUTION; r++) { */
-/*         for (int c = 0; c < HORIZONTAL_CHANNEL_RESOLUTION; c++) { */
-/*             if (ground_image.at<int8_t>(r, c) == 1) { */
-/*                 ground_viz.at<uint8_t>(r, c) = 0; */
-/*             } */
-/*         } */
-/*     } */
-/*  */
-/*     cv::imshow("Ground Plane", ground_viz); */
-/*     if (cv::waitKey(32) == 113) return; */
-
+    cv::Mat ground_plane;
+    ground_image.convertTo(ground_plane, CV_8U, 1, 1);
+    cv::threshold(ground_plane, ground_plane, 1, 255, cv::THRESH_BINARY_INV);
+    /* cv::imshow("Inclination Angles", inclination_angles / M_PI); */
+    cv::imshow("Smoothed Inclination Angles", smoothed_inclination_angles);
+    cv::imshow("Ground Plane", ground_plane);
+    if (cv::waitKey(32) == 113) return;
 
 }
 
@@ -224,13 +251,14 @@ void LidarTracking::preprocess_point_cloud_segmentation() {
 }
 
 void LidarTracking::segment_point_cloud() {
+    segmentation_queue.clear();
     int label = 1;
 
     std::vector<std::pair<int, int>> current_cluster; // keep track of the points in the current cluster
     for (int r = 0; r < VERTICAL_CHANNEL_RESOLUTION; r++) {
         for (int c = 0; c < HORIZONTAL_CHANNEL_RESOLUTION; c++) {
             if (this->label_image.at<int>(r, c) != 0) continue;
-            segmentation_queue.emplace(r, c);
+            segmentation_queue.emplace_back(r, c);
 
             current_cluster.clear();
             current_cluster.emplace_back(r, c);
@@ -260,11 +288,11 @@ void LidarTracking::segment_point_cloud() {
 
                     if (atan2(d2 * sin(alpha), d1 - d2 * cos(alpha)) > SEG_THRESH) {
                         this->label_image.at<int>(r2, c2) = label;
-                        segmentation_queue.emplace(r2, c2);
+                        segmentation_queue.emplace_back(r2, c2);
                         current_cluster.emplace_back(r2, c2);
                     }
                 }
-                segmentation_queue.pop();
+                segmentation_queue.pop_front();
             }
 
             // make sure we have a valid cluster
