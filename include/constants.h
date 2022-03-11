@@ -39,11 +39,17 @@ const float HORIZONTAL_ANGULAR_RESOLUTION = 360.0 / float(HORIZONTAL_CHANNEL_RES
 const float VERTICAL_ALPHA = VERTICAL_ANGULAR_RESOLUTION / 180 * M_PI;
 const float HORIZONTAL_ALPHA = HORIZONTAL_ANGULAR_RESOLUTION / 180 * M_PI;
 
+// ground removal indices
+const int POSSIBLE_GROUND_INDICES = 9;
+
 // segmentation threshold
 const float SEG_THRESH = 10.0 / 180 * M_PI; // 10 degrees according to paper
 
 // sensor distance threshold
-const float SENSOR_DIST_THRESH = 1.0;
+const float SENSOR_MIN_DIST_THRESH = 1.0f;
+const float SENSOR_MAX_DIST_THRESH = 1000.0f;
+
+const float EPSILON = 0.001f;
 
 
 // OUSTER point type
