@@ -1,0 +1,5 @@
+<launch>
+    <node pkg="lidar_inertial_prototype" type="lidar_tracking" name="lidar_tracking"></node>
+    <node pkg="lidar_inertial_prototype" type="feature_extraction" name="feature_extraction"></node>
+</launch>
+

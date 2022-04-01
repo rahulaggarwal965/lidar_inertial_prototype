@@ -50,6 +50,20 @@ const float SEG_THRESH = 10.0 / 180 * M_PI; // 10 degrees according to paper
 const float SENSOR_MIN_DIST_THRESH = 1.0f;
 const float SENSOR_MAX_DIST_THRESH = 1000.0f;
 
+// removal of degenerate points
+const float OCCLUSION_THRESH = 0.3f;
+const float PARALLEL_BEAM_MULTIPLIER = 0.2f;
+
+const float CURVATURE_EDGE_THRESH  = 1.0; // @ArbitraryParameter
+const float CURVATURE_PLANE_THRESH = 0.1; // @ArbitraryParameter
+
+// number of regions the horizontal fov gets cut up into
+// when doing feature extraction. Must divide into
+// HORIZONTAL_CHANNEL_RESOLUTION
+const int NUM_FEATURE_EXTRACTION_REGIONS = 4;
+const int NUM_EDGE_FEATURES_PER_REGION = 2; // from LOAM
+const int NUM_PLANAR_FEATURES_PER_REGION = 4; // from LOAM
+
 const float EPSILON = 0.001f;
 
 

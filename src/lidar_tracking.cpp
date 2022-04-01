@@ -2,6 +2,8 @@
 #include "visualization.h"
 #include "kernels.h"
 
+#include "lidar_inertial_prototype/segmentation_info.h"
+
 class LidarTracking {
 
     ros::NodeHandle nh;
@@ -24,19 +26,36 @@ class LidarTracking {
     std::deque<std::pair<int, int>> segmentation_queue;
     std::vector<std::pair<int, int>> neighbors = {{-1, 0}, {0, 1}, {1, 0}, {-0, -1}}; // row, col
 
+    pcl::PointCloud<OusterPointXYZIRT>::Ptr extracted_cloud;
+    lidar_inertial_prototype::segmentation_info segmentation_info;
+    std_msgs::Header cloud_header;
+
+    ros::Publisher segmentation_info_pub;
+    ros::Publisher extracted_cloud_pub;
+
 public:
     LidarTracking()
     : current_point_cloud(new pcl::PointCloud<OusterPointXYZIRT>()),
       indexed_point_cloud(new pcl::PointCloud<OusterPointXYZIRT>()),
       range_image(VERTICAL_CHANNEL_RESOLUTION, HORIZONTAL_CHANNEL_RESOLUTION, CV_32FC1, cv::Scalar::all(0)),
       ground_image(VERTICAL_CHANNEL_RESOLUTION, HORIZONTAL_CHANNEL_RESOLUTION, CV_8SC1, cv::Scalar::all(0)),
-      label_image(VERTICAL_CHANNEL_RESOLUTION, HORIZONTAL_CHANNEL_RESOLUTION, CV_32SC1, cv::Scalar::all(0)) {
+      label_image(VERTICAL_CHANNEL_RESOLUTION, HORIZONTAL_CHANNEL_RESOLUTION, CV_32SC1, cv::Scalar::all(0)),
+      extracted_cloud(new pcl::PointCloud<OusterPointXYZIRT>()) {
 
         //                       topic     queue size     function              object       
         cloud_sub = nh.subscribe(lidar_topic, 1, &LidarTracking::cloud_callback, this);
         /* imu_sub   = nh.subscribe(imu_topic,   1, &LidarTracking::imu_callback,   this); */
 
+        //                                   type                                         topic     queue size
+        segmentation_info_pub = nh.advertise<lidar_inertial_prototype::segmentation_info>("/segmentation_info", 1);
+        extracted_cloud_pub   = nh.advertise<sensor_msgs::PointCloud2>("/extracted_cloud", 1);
+
         indexed_point_cloud->resize(VERTICAL_CHANNEL_RESOLUTION * HORIZONTAL_CHANNEL_RESOLUTION);
+
+        segmentation_info.ring_start_idx.assign(VERTICAL_CHANNEL_RESOLUTION, 0);
+        segmentation_info.ring_end_idx.assign(VERTICAL_CHANNEL_RESOLUTION, 0);
+        segmentation_info.point_column.assign(VERTICAL_CHANNEL_RESOLUTION * HORIZONTAL_CHANNEL_RESOLUTION, 0);
+        segmentation_info.point_depth.assign(VERTICAL_CHANNEL_RESOLUTION * HORIZONTAL_CHANNEL_RESOLUTION, 0);
 
     }
 
@@ -48,6 +67,9 @@ public:
     void remove_ground();
     void preprocess_point_cloud_segmentation();
     void segment_point_cloud();
+    void extract_segmented_cloud();
+
+
     void reset();
 
 };
@@ -56,6 +78,7 @@ void LidarTracking::reset() {
 
     // reset point cloud for taking a new cloud in
     this->current_point_cloud->clear();
+    this->extracted_cloud->clear();
 
     // reset depth image 
     this->range_image.setTo(cv::Scalar::all(0));
@@ -75,10 +98,15 @@ void LidarTracking::cloud_callback(const sensor_msgs::PointCloud2ConstPtr &cloud
 
     segment_point_cloud();
 
+    extract_segmented_cloud();
+
     reset();
 }
 
 void LidarTracking::convert_point_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_msg) {
+
+    cloud_header = cloud_msg->header; 
+
     pcl::fromROSMsg(*cloud_msg, *current_point_cloud);
 }
 
@@ -315,8 +343,49 @@ void LidarTracking::segment_point_cloud() {
 
 }
 
+void LidarTracking::extract_segmented_cloud() {
+
+    int count = 0;
+    for (int j = 0; j < VERTICAL_CHANNEL_RESOLUTION; j++) {
+
+        // @ArbitraryParameter @Refactor
+        // This code is basically saying the index at which ring j starts is count - 1 + 5. 
+        // This is because we want a set of 10 continous points around a given point, 
+        // meaning that we have to give a buffer space. In this case we have 4 points 
+        // before and 5 points after (the 10 is used from the paper) - Rahul
+
+        segmentation_info.ring_start_idx[j] = count - 1 + 5;
+
+        for (int i = 0; i < HORIZONTAL_CHANNEL_RESOLUTION; i++) {
+            if (label_image.at<int>(j, i) > 0 || ground_image.at<int8_t>(j, i) == 1) {
+
+                segmentation_info.point_depth[count] = range_image.at<float>(j, i);
+                segmentation_info.point_column[count] = i; // we store this information for occlusion
+                extracted_cloud->push_back(indexed_point_cloud->points[j * HORIZONTAL_CHANNEL_RESOLUTION + i]);
+
+                count++;
+            }
+        }
+
+        segmentation_info.ring_end_idx[j] = count - 1 - 5;
+    }
+
+    sensor_msgs::PointCloud2 extracted_cloud_msg;
+
+    pcl::toROSMsg(*this->extracted_cloud, extracted_cloud_msg);
+    extracted_cloud_msg.header.stamp = cloud_header.stamp;
+    extracted_cloud_msg.header.frame_id = "os1_lidar";
+    extracted_cloud_pub.publish(extracted_cloud_msg);
+
+    segmentation_info.extracted_cloud = extracted_cloud_msg;
+    segmentation_info.header = cloud_header;
+    segmentation_info_pub.publish(segmentation_info);
+
+
+}
+
 int main(int argc, char **argv) {
-    ros::init(argc, argv, "lidar_inertial_prototype");
+    ros::init(argc, argv, "lidar_tracking");
 
     LidarTracking lt;
     
