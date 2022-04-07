@@ -15,24 +15,24 @@ class FeatureExtraction {
     ros::Subscriber extracted_cloud_sub;
 
     lidar_inertial_prototype::segmentation_info segmentation_info;
-    pcl::PointCloud<OusterPointXYZIRT>::Ptr extracted_cloud;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr extracted_cloud;
 
     std::vector<curvature_index_pair> curvature_index_pairs;
     std::vector<int> invalid_points;
 
-    pcl::PointCloud<OusterPointXYZIRT>::Ptr edge_feature_cloud;
-    pcl::PointCloud<OusterPointXYZIRT>::Ptr plane_feature_cloud;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr edge_feature_cloud;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr plane_feature_cloud;
 
     ros::Publisher edge_feature_cloud_pub;
     ros::Publisher plane_feature_cloud_pub;
 
 public:
     FeatureExtraction()
-    : extracted_cloud(new pcl::PointCloud<OusterPointXYZIRT>()),
+    : extracted_cloud(new pcl::PointCloud<pcl::PointXYZI>()),
       curvature_index_pairs(VERTICAL_CHANNEL_RESOLUTION * HORIZONTAL_CHANNEL_RESOLUTION),
       invalid_points(VERTICAL_CHANNEL_RESOLUTION * HORIZONTAL_CHANNEL_RESOLUTION),
-      edge_feature_cloud(new pcl::PointCloud<OusterPointXYZIRT>()), 
-      plane_feature_cloud(new pcl::PointCloud<OusterPointXYZIRT>()) {
+      edge_feature_cloud(new pcl::PointCloud<pcl::PointXYZI>()), 
+      plane_feature_cloud(new pcl::PointCloud<pcl::PointXYZI>()) {
 
         //                                    topic           queue size     function                                object       
         segmentation_info_sub = nh.subscribe("/segmentation_info", 1, &FeatureExtraction::segmentation_info_callback, this);
@@ -147,7 +147,7 @@ void FeatureExtraction::extract_features() {
 
             if (start_idx >= end_idx) continue;
 
-            std::sort(curvature_index_pairs.begin() + start_idx, curvature_index_pairs.end() + end_idx, 
+            std::sort(curvature_index_pairs.begin() + start_idx, curvature_index_pairs.begin() + end_idx, 
                     [](const curvature_index_pair &k1, const curvature_index_pair &k2) -> bool {return k1.curvature < k2.curvature;});
 
             int num_edge_features = 0;

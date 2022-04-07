@@ -17,7 +17,7 @@ class LidarTracking {
     cv::Mat range_image;
     std_msgs::Header current_cloud_header;
 
-    pcl::PointCloud<OusterPointXYZIRT>::Ptr indexed_point_cloud;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr indexed_point_cloud;
 
     cv::Mat ground_image;
     cv::Mat label_image;
@@ -26,27 +26,29 @@ class LidarTracking {
     std::deque<std::pair<int, int>> segmentation_queue;
     std::vector<std::pair<int, int>> neighbors = {{-1, 0}, {0, 1}, {1, 0}, {-0, -1}}; // row, col
 
-    pcl::PointCloud<OusterPointXYZIRT>::Ptr extracted_cloud;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr extracted_cloud;
     lidar_inertial_prototype::segmentation_info segmentation_info;
     std_msgs::Header cloud_header;
 
+    ros::Publisher full_cloud_pub;
     ros::Publisher segmentation_info_pub;
     ros::Publisher extracted_cloud_pub;
 
 public:
     LidarTracking()
     : current_point_cloud(new pcl::PointCloud<OusterPointXYZIRT>()),
-      indexed_point_cloud(new pcl::PointCloud<OusterPointXYZIRT>()),
+      indexed_point_cloud(new pcl::PointCloud<pcl::PointXYZI>()),
       range_image(VERTICAL_CHANNEL_RESOLUTION, HORIZONTAL_CHANNEL_RESOLUTION, CV_32FC1, cv::Scalar::all(0)),
       ground_image(VERTICAL_CHANNEL_RESOLUTION, HORIZONTAL_CHANNEL_RESOLUTION, CV_8SC1, cv::Scalar::all(0)),
       label_image(VERTICAL_CHANNEL_RESOLUTION, HORIZONTAL_CHANNEL_RESOLUTION, CV_32SC1, cv::Scalar::all(0)),
-      extracted_cloud(new pcl::PointCloud<OusterPointXYZIRT>()) {
+      extracted_cloud(new pcl::PointCloud<pcl::PointXYZI>()) {
 
         //                       topic     queue size     function              object       
         cloud_sub = nh.subscribe(lidar_topic, 1, &LidarTracking::cloud_callback, this);
         /* imu_sub   = nh.subscribe(imu_topic,   1, &LidarTracking::imu_callback,   this); */
 
         //                                   type                                         topic     queue size
+        full_cloud_pub     = nh.advertise<sensor_msgs::PointCloud2>("/full_cloud", 1);
         segmentation_info_pub = nh.advertise<lidar_inertial_prototype::segmentation_info>("/segmentation_info", 1);
         extracted_cloud_pub   = nh.advertise<sensor_msgs::PointCloud2>("/extracted_cloud", 1);
 
@@ -131,7 +133,12 @@ void LidarTracking::project_point_cloud() {
 
         this->range_image.at<float>(row, col) = dist;
         auto index = col + row * HORIZONTAL_CHANNEL_RESOLUTION;
-        this->indexed_point_cloud->points[index] = point; // @ROBUSTNESS: does this actually copy the point?
+
+        // copy point into XYZI format
+        this->indexed_point_cloud->points[index].x = point.x;
+        this->indexed_point_cloud->points[index].y = point.y;
+        this->indexed_point_cloud->points[index].z = point.z;
+        this->indexed_point_cloud->points[index].intensity = dist;
 
     }
 
@@ -381,6 +388,13 @@ void LidarTracking::extract_segmented_cloud() {
     segmentation_info.header = cloud_header;
     segmentation_info_pub.publish(segmentation_info);
 
+    sensor_msgs::PointCloud2 full_cloud_msg;
+    pcl::toROSMsg(*this->indexed_point_cloud, full_cloud_msg);
+    full_cloud_msg.header.stamp = cloud_header.stamp;
+    full_cloud_msg.header.frame_id = "os1_lidar";
+    if (full_cloud_pub.getNumSubscribers() > 0) {
+        full_cloud_pub.publish(full_cloud_msg);
+    }
 
 }
 

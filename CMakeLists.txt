@@ -63,3 +63,6 @@ target_link_libraries(lidar_tracking ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${Open
 
 add_executable(feature_extraction src/feature_extraction.cpp)
 target_link_libraries(feature_extraction ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES})
+
+add_executable(visualization src/visualization.cpp)
+target_link_libraries(visualization ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES})
