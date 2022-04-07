@@ -17,10 +17,6 @@
 #include <pcl/point_types.h>
 #include <pcl_ros/point_cloud.h>
 #include <pcl_conversions/pcl_conversions.h>
-#include <pcl/range_image/range_image.h>
-#include <pcl/filters/filter.h>
-#include <pcl/filters/voxel_grid.h>
-#include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/common/common.h>
 #include <pcl/registration/icp.h>
 
@@ -44,7 +40,7 @@ const int POSSIBLE_GROUND_INDICES = 9;
 const float GROUND_ANGLE_THRESH = 5.0 / 180 * M_PI;
 const float VERTICAL_ALPHA = VERTICAL_ANGULAR_RESOLUTION / 180 * M_PI;
 const float HORIZONTAL_ALPHA = HORIZONTAL_ANGULAR_RESOLUTION / 180 * M_PI;
-const float SEG_THRESH = 10.0 / 180 * M_PI; // 10 degrees according to paper
+const float SEG_THRESH = 60.0 / 180 * M_PI; // 10 degrees according to paper
 
 // sensor distance threshold
 const float SENSOR_MIN_DIST_THRESH = 1.0f;

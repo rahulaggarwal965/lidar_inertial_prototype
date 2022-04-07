@@ -1,4 +1,5 @@
 #include "constants.h"
+#include "helpers.h"
 #include "lidar_inertial_prototype/segmentation_info.h"
 
 // need this for std::sort
@@ -20,6 +21,9 @@ class FeatureExtraction {
     std::vector<curvature_index_pair> curvature_index_pairs;
     std::vector<int> invalid_points;
 
+    pcl::PointCloud<pcl::PointXYZI>::Ptr curvature_cloud;
+    ros::Publisher curvature_cloud_pub;
+
     pcl::PointCloud<pcl::PointXYZI>::Ptr edge_feature_cloud;
     pcl::PointCloud<pcl::PointXYZI>::Ptr plane_feature_cloud;
 
@@ -31,6 +35,7 @@ public:
     : extracted_cloud(new pcl::PointCloud<pcl::PointXYZI>()),
       curvature_index_pairs(VERTICAL_CHANNEL_RESOLUTION * HORIZONTAL_CHANNEL_RESOLUTION),
       invalid_points(VERTICAL_CHANNEL_RESOLUTION * HORIZONTAL_CHANNEL_RESOLUTION),
+      curvature_cloud(new pcl::PointCloud<pcl::PointXYZI>()),
       edge_feature_cloud(new pcl::PointCloud<pcl::PointXYZI>()), 
       plane_feature_cloud(new pcl::PointCloud<pcl::PointXYZI>()) {
 
@@ -38,6 +43,7 @@ public:
         segmentation_info_sub = nh.subscribe("/segmentation_info", 1, &FeatureExtraction::segmentation_info_callback, this);
 
         //                                            type                   topic     queue size
+        curvature_cloud_pub     = nh.advertise<sensor_msgs::PointCloud2>("/curvature_cloud",     1);
         edge_feature_cloud_pub  = nh.advertise<sensor_msgs::PointCloud2>("/edge_feature_cloud",  1);
         plane_feature_cloud_pub = nh.advertise<sensor_msgs::PointCloud2>("/plane_feature_cloud", 1);
     }
@@ -59,10 +65,10 @@ void FeatureExtraction::segmentation_info_callback(const lidar_inertial_prototyp
     compute_curvature();
 
     remove_degenerate_features();
+    /*  */
+    /* extract_features(); */
 
-    extract_features();
-
-    publish_feature_clouds();
+    /* publish_feature_clouds(); */
 
     // TODO rough outline of plan
     // propagate_features_forward();
@@ -77,24 +83,57 @@ void FeatureExtraction::segmentation_info_callback(const lidar_inertial_prototyp
 void FeatureExtraction::compute_curvature() {
     int num_points = extracted_cloud->points.size();
 
-    /* for (int j = 0; j < VERTICAL_CHANNEL_RESOLUTION; j++) { */
+    this->curvature_cloud->clear();
 
-        for (int i = 5; i < num_points - 5; i++) { // this is the difference I'm talking about >>
-        //for (int i = segmentation_info.ring_start_idx[j]; i < segmentation_info.ring_end_idx[j]; i++) {
-            float diff = segmentation_info.point_depth[i-5] + segmentation_info.point_depth[i-4]
-                         + segmentation_info.point_depth[i-3] + segmentation_info.point_depth[i-2]
-                         + segmentation_info.point_depth[i-1] - segmentation_info.point_depth[i] * 10
-                         + segmentation_info.point_depth[i+1] + segmentation_info.point_depth[i+2]
-                         + segmentation_info.point_depth[i+3] + segmentation_info.point_depth[i+4]
-                         + segmentation_info.point_depth[i+5];            
+    for (int i = 5; i < num_points - 5; i++) {
+        const float diff = segmentation_info.point_depth[i - 5] + segmentation_info.point_depth[i - 4]
+                         + segmentation_info.point_depth[i - 3] + segmentation_info.point_depth[i - 2]
+                         + segmentation_info.point_depth[i - 1] - segmentation_info.point_depth[i] * 10
+                         + segmentation_info.point_depth[i + 1] + segmentation_info.point_depth[i + 2]
+                         + segmentation_info.point_depth[i + 3] + segmentation_info.point_depth[i + 4]
+                         + segmentation_info.point_depth[i + 5];            
 
-            this->curvature_index_pairs[i].curvature = diff * diff;
-            this->curvature_index_pairs[i].index = i;
+        /* const float diff_x = extracted_cloud->points[i - 5].x + extracted_cloud->points[i - 4].x */
+        /*                    + extracted_cloud->points[i - 3].x + extracted_cloud->points[i - 2].x */
+        /*                    + extracted_cloud->points[i - 1].x - 10 * extracted_cloud->points[i].x */
+        /*                    + extracted_cloud->points[i + 1].x + extracted_cloud->points[i + 2].x */
+        /*                    + extracted_cloud->points[i + 3].x + extracted_cloud->points[i + 4].x */
+        /*                    + extracted_cloud->points[i + 5].x; */
+        /* const float diff_y = extracted_cloud->points[i - 5].y + extracted_cloud->points[i - 4].y */
+        /*                    + extracted_cloud->points[i - 3].y + extracted_cloud->points[i - 2].y */
+        /*                    + extracted_cloud->points[i - 1].y - 10 * extracted_cloud->points[i].y */
+        /*                    + extracted_cloud->points[i + 1].y + extracted_cloud->points[i + 2].y */
+        /*                    + extracted_cloud->points[i + 3].y + extracted_cloud->points[i + 4].y */
+        /*                    + extracted_cloud->points[i + 5].y; */
+        /* const float diff_z = extracted_cloud->points[i - 5].z + extracted_cloud->points[i - 4].z */
+        /*                    + extracted_cloud->points[i - 3].z + extracted_cloud->points[i - 2].z */
+        /*                    + extracted_cloud->points[i - 1].z - 10 * extracted_cloud->points[i].z */
+        /*                    + extracted_cloud->points[i + 1].z + extracted_cloud->points[i + 2].z */
+        /*                    + extracted_cloud->points[i + 3].z + extracted_cloud->points[i + 4].z */
+        /*                    + extracted_cloud->points[i + 5].z; */
 
-            this->invalid_points[i] = 0; // point is not invalid yet
+        const float curvature = diff * diff;
+        /* const float curvature = diff_x * diff_x + diff_y * diff_y + diff_z * diff_z; */
 
-        }
+        this->curvature_index_pairs[i].curvature = curvature;
+        this->curvature_index_pairs[i].index = i;
+
+        /* auto &point = this->curvature_cloud->emplace_back(this->extracted_cloud->points[i]); */
+        /* point.intensity = curvature; */
+
+        this->invalid_points[i] = 0; // point is not invalid yet
+
+    }
+
+    /* std::sort(curvature_index_pairs.begin(), curvature_index_pairs.end(), */
+    /*         [](const curvature_index_pair &k1, const curvature_index_pair &k2) -> bool {return k1.curvature < k2.curvature;}); */
+
+    /* for (int i = 0; i < curvature_index_pairs.size(); i++) { */
+    /*     const int index = curvature_index_pairs[i].index; */
+    /*     this->curvature_cloud->points[index].intensity = i; */
     /* } */
+
+    /* publish_cloud<pcl::PointXYZI>(curvature_cloud_pub, curvature_cloud, segmentation_info.header.stamp, "os1_lidar"); */
 }
 
 void FeatureExtraction::remove_degenerate_features() {
@@ -104,7 +143,7 @@ void FeatureExtraction::remove_degenerate_features() {
         const float depth1 = segmentation_info.point_depth[i];
         const float depth2 = segmentation_info.point_depth[i+1];
 
-        const int col_diff = abs(segmentation_info.point_depth[i+1] - segmentation_info.point_depth[i]);
+        const int col_diff = abs(int(segmentation_info.point_column[i+1] - segmentation_info.point_column[i]));
 
         if (col_diff < 10) {
             if (depth1 - depth2 > OCCLUSION_THRESH) {
@@ -130,6 +169,27 @@ void FeatureExtraction::remove_degenerate_features() {
             this->invalid_points[i] = 1;
         }
     }
+
+    std::sort(curvature_index_pairs.begin(), curvature_index_pairs.end(),
+            [](const curvature_index_pair &k1, const curvature_index_pair &k2) -> bool {return k1.curvature < k2.curvature;});
+
+    /* for (int i = 0; i < curvature_index_pairs.size(); i++) { */
+    /*     const int index = curvature_index_pairs[i].index; */
+    /*     this->curvature_cloud->points[index].intensity = i; */
+    /* } */
+
+    int k = 0;
+    for (int i = 0; i < curvature_index_pairs.size(); i++) {
+        const int index = curvature_index_pairs[i].index;
+        if (invalid_points[index] == 0) {
+            auto &point = curvature_cloud->emplace_back(extracted_cloud->points[index]);
+            point.intensity = k;
+            k++;
+        }
+    }
+
+    
+    publish_cloud<pcl::PointXYZI>(curvature_cloud_pub, curvature_cloud, segmentation_info.header.stamp, "os1_lidar");
 }
 
 void FeatureExtraction::extract_features() {

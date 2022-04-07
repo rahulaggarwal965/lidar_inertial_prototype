@@ -1,6 +1,7 @@
 #include "constants.h"
 #include "visualization.h"
 #include "kernels.h"
+#include "helpers.h"
 
 #include "lidar_inertial_prototype/segmentation_info.h"
 
@@ -377,6 +378,7 @@ void LidarTracking::extract_segmented_cloud() {
         segmentation_info.ring_end_idx[j] = count - 1 - 5;
     }
 
+
     sensor_msgs::PointCloud2 extracted_cloud_msg;
 
     pcl::toROSMsg(*this->extracted_cloud, extracted_cloud_msg);
@@ -388,13 +390,7 @@ void LidarTracking::extract_segmented_cloud() {
     segmentation_info.header = cloud_header;
     segmentation_info_pub.publish(segmentation_info);
 
-    sensor_msgs::PointCloud2 full_cloud_msg;
-    pcl::toROSMsg(*this->indexed_point_cloud, full_cloud_msg);
-    full_cloud_msg.header.stamp = cloud_header.stamp;
-    full_cloud_msg.header.frame_id = "os1_lidar";
-    if (full_cloud_pub.getNumSubscribers() > 0) {
-        full_cloud_pub.publish(full_cloud_msg);
-    }
+    publish_cloud<pcl::PointXYZI>(full_cloud_pub, indexed_point_cloud, cloud_header.stamp, "os1_lidar");
 
 }
 
