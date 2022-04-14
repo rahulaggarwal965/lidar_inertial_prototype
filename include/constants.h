@@ -40,7 +40,7 @@ const int POSSIBLE_GROUND_INDICES = 9;
 const float GROUND_ANGLE_THRESH = 5.0 / 180 * M_PI;
 const float VERTICAL_ALPHA = VERTICAL_ANGULAR_RESOLUTION / 180 * M_PI;
 const float HORIZONTAL_ALPHA = HORIZONTAL_ANGULAR_RESOLUTION / 180 * M_PI;
-const float SEG_THRESH = 60.0 / 180 * M_PI; // 10 degrees according to paper
+const float SEG_THRESH = 10.0 / 180 * M_PI; // 10 degrees according to paper
 
 // sensor distance threshold
 const float SENSOR_MIN_DIST_THRESH = 1.0f;
@@ -61,6 +61,8 @@ const int NUM_EDGE_FEATURES_PER_REGION = 2; // from LOAM
 const int NUM_PLANAR_FEATURES_PER_REGION = 4; // from LOAM
 
 const float EPSILON = 0.001f;
+
+const bool VISUALIZE_SEG = false;
 
 
 // OUSTER point type

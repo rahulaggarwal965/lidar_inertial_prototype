@@ -144,10 +144,12 @@ void LidarTracking::project_point_cloud() {
     }
 
     // @DEBUG
-    double max = 1;
-    cv::minMaxLoc(range_image, 0, &max);
-    cv::imshow("Projected Point Cloud", this->range_image / max);
-    if (cv::waitKey(32) == 113) return;
+    if (VISUALIZE_SEG) {
+        double max = 1;
+        cv::minMaxLoc(range_image, 0, &max);
+        cv::imshow("Projected Point Cloud", this->range_image / max);
+        if (cv::waitKey(32) == 113) return;
+    }
 }
 
 // @Refactor different file?
@@ -263,13 +265,15 @@ void LidarTracking::remove_ground() {
     }
 
 
-    cv::Mat ground_plane;
-    ground_image.convertTo(ground_plane, CV_8U, 1, 1);
-    cv::threshold(ground_plane, ground_plane, 1, 255, cv::THRESH_BINARY_INV);
-    /* cv::imshow("Inclination Angles", inclination_angles / M_PI); */
-    cv::imshow("Smoothed Inclination Angles", smoothed_inclination_angles);
-    cv::imshow("Ground Plane", ground_plane);
-    if (cv::waitKey(32) == 113) return;
+    if (VISUALIZE_SEG) {
+        cv::Mat ground_plane;
+        ground_image.convertTo(ground_plane, CV_8U, 1, 1);
+        cv::threshold(ground_plane, ground_plane, 1, 255, cv::THRESH_BINARY_INV);
+        /* cv::imshow("Inclination Angles", inclination_angles / M_PI); */
+        cv::imshow("Smoothed Inclination Angles", smoothed_inclination_angles);
+        cv::imshow("Ground Plane", ground_plane);
+        if (cv::waitKey(32) == 113) return;
+    }
 
 }
 
@@ -344,10 +348,12 @@ void LidarTracking::segment_point_cloud() {
         }
     }
 
-    cv::Mat segmented_image = visualize_labels(label_image);
+    if (VISUALIZE_SEG) {
+        cv::Mat segmented_image = visualize_labels(label_image);
 
-    cv::imshow("Segmented Image", segmented_image);
-    if (cv::waitKey(32) == 113) return;
+        cv::imshow("Segmented Image", segmented_image);
+        if (cv::waitKey(32) == 113) return;
+    }
 
 }
 
@@ -356,13 +362,9 @@ void LidarTracking::extract_segmented_cloud() {
     int count = 0;
     for (int j = 0; j < VERTICAL_CHANNEL_RESOLUTION; j++) {
 
-        // @ArbitraryParameter @Refactor
-        // This code is basically saying the index at which ring j starts is count - 1 + 5. 
-        // This is because we want a set of 10 continous points around a given point, 
-        // meaning that we have to give a buffer space. In this case we have 4 points 
-        // before and 5 points after (the 10 is used from the paper) - Rahul
+        // @Refactor, this code is so garbage, 
 
-        segmentation_info.ring_start_idx[j] = count - 1 + 5;
+        segmentation_info.ring_start_idx[j] = count + 5;
 
         for (int i = 0; i < HORIZONTAL_CHANNEL_RESOLUTION; i++) {
             if (label_image.at<int>(j, i) > 0 || ground_image.at<int8_t>(j, i) == 1) {
