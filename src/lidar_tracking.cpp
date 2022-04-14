@@ -362,7 +362,14 @@ void LidarTracking::extract_segmented_cloud() {
     int count = 0;
     for (int j = 0; j < VERTICAL_CHANNEL_RESOLUTION; j++) {
 
-        // @Refactor, this code is so garbage, 
+        // @Refactor
+        // 1. Add a ground flag for ground points
+        // 2. Do adaptive breakpoint testing
+        //    a. I need to consider when two points in the same row have similar range but
+        //    are separated by many columns (occlusion between them)
+        //    b. I do NOT want to create a breakpoint simply when there is a large range gap
+        //       as this eliminates edges of walls that extend "in" to the FOV
+        // 3. I also want a better solution to the "wrap around problem" (not sure if worth pursuing)
 
         segmentation_info.ring_start_idx[j] = count + 5;
 
