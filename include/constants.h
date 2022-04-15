@@ -19,6 +19,10 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/common/common.h>
 #include <pcl/registration/icp.h>
+#include <pcl/features/normal_3d.h>
+#include <pcl/segmentation/region_growing.h>
+#include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/filters/extract_indices.h>
 
 #include <string>
 

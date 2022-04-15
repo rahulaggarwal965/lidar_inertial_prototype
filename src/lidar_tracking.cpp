@@ -291,6 +291,7 @@ void LidarTracking::preprocess_point_cloud_segmentation() {
     }
 }
 
+// TODO: use morphology to make things smoother
 void LidarTracking::segment_point_cloud() {
     segmentation_queue.clear();
     int label = 1;
@@ -349,12 +350,12 @@ void LidarTracking::segment_point_cloud() {
         }
     }
 
-    if (VISUALIZE_SEG) {
+    /* if (VISUALIZE_SEG) { */
         cv::Mat segmented_image = visualize_labels(label_image);
 
         cv::imshow("Segmented Image", segmented_image);
         if (cv::waitKey(32) == 113) return;
-    }
+    /* } */
 
 }
 

@@ -11,12 +11,13 @@ class Visualization {
 
     struct Cloud {
         enum Flags {
-            COLOR     = 1 << 0,
+            COLOR = 1 << 0,
         };
 
         enum Type {
             XYZI,
-            XYZL
+            XYZL,
+            XYZRGB,
         };
         
         int flags = 0;
@@ -77,6 +78,8 @@ public:
                             cloud.type = Cloud::XYZI;
                         } else if (s == "1" || s == "label") {
                             cloud.type = Cloud::XYZL;
+                        } else if (s == "2" || s == "rgb") {
+                            cloud.type = Cloud::XYZRGB;
                         }
                     } else if (s == "-p" || s == "--point-size") {
                         cloud.point_size = std::stoi(argv[++cursor]);
@@ -186,6 +189,16 @@ void Visualization::add_or_update_cloud(const Cloud &cloud, const std::string &t
 
         case Cloud::XYZL: {
             pcl::PointCloud<pcl::PointXYZL>::Ptr cloud_ptr(new pcl::PointCloud<pcl::PointXYZL>);
+            pcl::fromROSMsg(*cloud.cloud_msg, *cloud_ptr);
+            if (!this->viewer->updatePointCloud(cloud_ptr, id)) {
+                this->viewer->addPointCloud(cloud_ptr, id, viewport);
+                set_cloud_properties(cloud, id, viewport);
+            }
+            break;
+        }
+
+        case Cloud::XYZRGB: {
+            pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_ptr(new pcl::PointCloud<pcl::PointXYZRGB>);
             pcl::fromROSMsg(*cloud.cloud_msg, *cloud_ptr);
             if (!this->viewer->updatePointCloud(cloud_ptr, id)) {
                 this->viewer->addPointCloud(cloud_ptr, id, viewport);

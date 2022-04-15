@@ -30,6 +30,8 @@ class FeatureExtraction {
     ros::Publisher edge_feature_cloud_pub;
     ros::Publisher plane_feature_cloud_pub;
 
+    ros::Publisher plane_normal_seg_pub;
+
 public:
     FeatureExtraction()
     : extracted_cloud(new pcl::PointCloud<pcl::PointXYZI>()),
@@ -46,6 +48,7 @@ public:
         curvature_cloud_pub     = nh.advertise<sensor_msgs::PointCloud2>("/curvature_cloud",     1);
         edge_feature_cloud_pub  = nh.advertise<sensor_msgs::PointCloud2>("/edge_feature_cloud",  1);
         plane_feature_cloud_pub = nh.advertise<sensor_msgs::PointCloud2>("/plane_feature_cloud", 1);
+        plane_normal_seg_pub    = nh.advertise<sensor_msgs::PointCloud2>("/plane_normal_seg",    1);
     }
 
     void segmentation_info_callback(const lidar_inertial_prototype::segmentation_infoConstPtr &segmentation_info);
@@ -54,6 +57,7 @@ public:
     void remove_degenerate_features();
     void extract_feature_points();
     void publish_feature_clouds();
+    void detect_new_features();
 
 };
 
@@ -74,6 +78,8 @@ void FeatureExtraction::segmentation_info_callback(const lidar_inertial_prototyp
     // propagate_features_forward();
     
     // segment ... 
+
+    detect_new_features();
 
 
 }
@@ -272,9 +278,54 @@ void FeatureExtraction::publish_feature_clouds() {
     publish_cloud<pcl::PointXYZL>(plane_feature_cloud_pub, plane_feature_cloud, segmentation_info.header.stamp, segmentation_info.header.frame_id);
 }
 
-/* void FeatureExtraction::extract_planes() { */
-/*  */
-/* } */
+// TODO: use a pass through filter for the region growing algorithm using the label field
+void FeatureExtraction::detect_new_features() {
+    pcl::search::Search<pcl::PointXYZL>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZL>);
+    pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
+    pcl::NormalEstimation<pcl::PointXYZL, pcl::Normal> normal_estimator;
+    normal_estimator.setSearchMethod(tree);
+    normal_estimator.setInputCloud(plane_feature_cloud);
+    normal_estimator.setKSearch(25);
+    normal_estimator.compute(*normals);
+
+    pcl::RegionGrowing<pcl::PointXYZL, pcl::Normal> reg;
+    reg.setMinClusterSize(12);
+    reg.setMaxClusterSize(100000);
+    reg.setSearchMethod(tree);
+    reg.setNumberOfNeighbours(15);
+    reg.setInputCloud(plane_feature_cloud);
+    reg.setInputNormals(normals);
+
+    reg.setSmoothnessThreshold(3.0 / 180.0 * M_PI);
+    reg.setCurvatureThreshold(1.0);
+
+    std::vector<pcl::PointIndices> clusters;
+    reg.extract(clusters);
+
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr colored_cloud = reg.getColoredCloud();
+    publish_cloud<pcl::PointXYZRGB>(plane_normal_seg_pub, colored_cloud, segmentation_info.header.stamp, segmentation_info.header.frame_id);
+
+    pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
+    pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+
+    pcl::SACSegmentation<pcl::PointXYZRGB> seg;
+    seg.setOptimizeCoefficients(true);
+
+    seg.setModelType(pcl::SACMODEL_PLANE);
+    seg.setMethodType(pcl::SAC_PROSAC);
+    seg.setDistanceThreshold(0.01);
+
+    pcl::ExtractIndices<pcl::PointXYZRGB> extract;
+
+    for (int i = 0; i < clusters.size(); i++) {
+        extract.setInputCloud(colored_cloud);
+        /* extract.setIndices(clusters[i].); */
+    }
+
+    /* seg.setInputCloud() */
+
+        
+}
 
 int main(int argc, char **argv) {
     ros::init(argc, argv, "feature_extraction");
