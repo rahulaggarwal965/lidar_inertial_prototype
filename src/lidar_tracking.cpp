@@ -57,6 +57,7 @@ public:
 
         segmentation_info.ring_start_idx.assign(VERTICAL_CHANNEL_RESOLUTION, 0);
         segmentation_info.ring_end_idx.assign(VERTICAL_CHANNEL_RESOLUTION, 0);
+        segmentation_info.point_label.assign(VERTICAL_CHANNEL_RESOLUTION * HORIZONTAL_CHANNEL_RESOLUTION, 0);
         segmentation_info.point_column.assign(VERTICAL_CHANNEL_RESOLUTION * HORIZONTAL_CHANNEL_RESOLUTION, 0);
         segmentation_info.point_depth.assign(VERTICAL_CHANNEL_RESOLUTION * HORIZONTAL_CHANNEL_RESOLUTION, 0);
 
@@ -363,7 +364,7 @@ void LidarTracking::extract_segmented_cloud() {
     for (int j = 0; j < VERTICAL_CHANNEL_RESOLUTION; j++) {
 
         // @Refactor
-        // 1. Add a ground flag for ground points
+        // 1. Add a ground flag for ground points @DONE
         // 2. Do adaptive breakpoint testing
         //    a. I need to consider when two points in the same row have similar range but
         //    are separated by many columns (occlusion between them)
@@ -374,8 +375,15 @@ void LidarTracking::extract_segmented_cloud() {
         segmentation_info.ring_start_idx[j] = count + 5;
 
         for (int i = 0; i < HORIZONTAL_CHANNEL_RESOLUTION; i++) {
-            if (label_image.at<int>(j, i) > 0 || ground_image.at<int8_t>(j, i) == 1) {
+            bool ground_point = ground_image.at<int8_t>(j, i) == 1;
+            int label = label_image.at<int>(j, i);
+            if (label > 0 || ground_point) {
 
+                if (ground_point) {
+                    segmentation_info.point_label[count] = 0;
+                } else {
+                    segmentation_info.point_label[count] = label;
+                }
                 segmentation_info.point_depth[count] = range_image.at<float>(j, i);
                 segmentation_info.point_column[count] = i; // we store this information for occlusion
                 extracted_cloud->push_back(indexed_point_cloud->points[j * HORIZONTAL_CHANNEL_RESOLUTION + i]);
