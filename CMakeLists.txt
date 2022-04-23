@@ -27,6 +27,7 @@ add_message_files(
     DIRECTORY msg
     FILES
     segmentation_info.msg
+    plane.msg
 )
 
 generate_messages(

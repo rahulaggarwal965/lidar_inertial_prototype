@@ -1,6 +1,7 @@
 #include "constants.h"
 #include "pcl_conversions/pcl_conversions.h"
 #include <pcl/visualization/cloud_viewer.h>
+#include "lidar_inertial_prototype/plane.h"
 
 
 class Visualization {
@@ -40,6 +41,8 @@ class Visualization {
     };
 
     ros::NodeHandle nh;
+
+    ros::Subscriber planes_sub;
 
     std::vector<Viewport> viewports;
     std::unordered_map<std::string, Cloud> clouds;
@@ -139,10 +142,12 @@ public:
 
         viewer->addCoordinateSystem(1.0);
 
+        planes_sub = nh.subscribe("/planes", 1, &Visualization::planes_handler, this);
 
     }
 
     void cloud_handler(const sensor_msgs::PointCloud2ConstPtr &cloud_msg, const std::string &topic_name);
+    void planes_handler(const lidar_inertial_prototype::planeConstPtr &planes_msg);
 
     void set_cloud_properties(const Cloud &cloud, const std::string &cloud_name, int viewport);
     void add_or_update_cloud(const Cloud &cloud,  const std::string &cloud_name, int viewport);
@@ -207,6 +212,24 @@ void Visualization::add_or_update_cloud(const Cloud &cloud, const std::string &t
             break;
         }
     };
+}
+
+void Visualization::planes_handler(const lidar_inertial_prototype::planeConstPtr &planes_msg) {
+    const int num_planes = planes_msg->normals.size();
+    pcl::ModelCoefficients coeffs;
+    coeffs.values.resize(4);
+
+    this->viewer->removeAllShapes();
+
+    for (int i = 0; i < num_planes; i++) {
+        const std::string id = "plane_" + std::to_string(i);
+        coeffs.values[0] = planes_msg->normals[i].x;
+        coeffs.values[1] = planes_msg->normals[i].y;
+        coeffs.values[2] = planes_msg->normals[i].z;
+        coeffs.values[3] = planes_msg->distances[i];
+
+        this->viewer->addPlane(coeffs, id);
+    }
 }
 
 int main(int argc, char **argv) {

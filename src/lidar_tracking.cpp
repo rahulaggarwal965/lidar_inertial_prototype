@@ -350,12 +350,12 @@ void LidarTracking::segment_point_cloud() {
         }
     }
 
-    /* if (VISUALIZE_SEG) { */
+    if (VISUALIZE_SEG) {
         cv::Mat segmented_image = visualize_labels(label_image);
 
         cv::imshow("Segmented Image", segmented_image);
         if (cv::waitKey(32) == 113) return;
-    /* } */
+    }
 
 }
 
